@@ -1,0 +1,5 @@
+bios.h(35): Warning! W303: Parameter 'my_chunk_size' has been defined, but not referenced
+bios.h(35): Warning! W303: Parameter 'my_offset' has been defined, but not referenced
+bios.h(35): Warning! W303: Parameter 'my_segment' has been defined, but not referenced
+main.c(38): Warning! W303: Parameter 'argv' has been defined, but not referenced
+main.c(38): Warning! W303: Parameter 'argc' has been defined, but not referenced
