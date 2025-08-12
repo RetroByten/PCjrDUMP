@@ -1,5 +1,5 @@
-#ifndef __bios__
-#define __bios__
+#ifndef __bios_emu__
+#define __bios_emu__
 
 #include <dos.h>
 
@@ -28,6 +28,31 @@ unsigned int ror(unsigned int value, unsigned int shifts){
     }
     return value;
 }
+
+unsigned char get_video_mode(){
+	unsigned char mode;
+	union REGPACK* reg_pack;
+	reg_pack = malloc(sizeof(union REGPACK)); // Allocate memory
+	
+	reg_pack->h.ah = (unsigned char)int_video_get_mode;
+	intr(int_video,reg_pack); // Get current video mode
+	
+	mode = reg_pack->h.al;
+	
+	free(reg_pack); // Free memory
+	return mode;
+}
+
+void set_video_mode(unsigned char mode){
+	union REGPACK* reg_pack;
+	reg_pack = malloc(sizeof(union REGPACK)); // Allocate memory
+	reg_pack->h.ah = (unsigned char)int_video_set_mode;
+	reg_pack->h.al = mode;
+	intr(int_video,reg_pack); // Get current video mode
+	
+	free(reg_pack); // Free memory
+}
+
 
 // PCjr Technical Reference - Test 4 - F000:0134 (A-9) and F000:FEEB (A-107)
 unsigned int bios_ros_cksum(unsigned int my_segment, unsigned int my_offset, unsigned int my_chunk_size){
