@@ -1,30 +1,18 @@
-/* Definitions */
-#define int_keyboard 0x16
-#define     int_keyboard_read_key 0x00
-#define     int_keyboard_get_state 0x01
 
-#define int_video 0x10
-#define 	int_video_set_mode 0x00
-#define 		video_mode_4025_color 0x01
-//#define mode_4025_greyscale 0x00
-//#define mode_8025_greyscale 0x02
-#define int_video_set_cursor_pos 0x02
-#define int_video_get_cursor_pos 0x03
-#define 	int_video_get_mode 0x0F
+// Standard C includes
+#include <stdio.h> // For printing
+//#include <stdlib.h> // For malloc
 
-/* Standard C Libraries */
-#include <stdio.h> /* For printing */
-#include <stdlib.h> /* For malloc */
+// DOS / BIOS specific includes
+#include <conio.h> // For reading the keyboard directly // TODO - move this to BIOS
+//#include <dos.h>
 
-/* DOS/BIOS specific includes */
-#include <conio.h> /* For reading the keyboard directly */
-#include <dos.h> /* NOTE: look in i86.h [included when dos.h is included] for register structures and interrupt call definitions */
+// Project specific includes
+#include "x86_emu.h"
+#include "bios_emu.h" // Emulates some BIOS functions
+#include "basic_emu.h" // Emulates some BASIC functions
 
-/* Project includes */
-#include "bios_emu.h"
-
-
-
+// Enums
 enum {
         TITLE_MODE = 0,
         MENU_MODE,
@@ -32,146 +20,177 @@ enum {
         EXIT_MODE
 };
 
+// Globals
+unsigned char original_video_mode;
+unsigned char main_program_mode;
 
-// V1 - just unconditionally dump cartridge spaces in 32K chunks
-// V2 - Structure:
-//      - 1.) Title screen mode
-//  - 2.) Menu screen mode
-//  - 3x.) Option Sub-screen mode(s)
-//  - 4.) Credits screen mode
-//  - 5.) Exit mode
-
-// #VN - before dumping, check to see any signature/contents and ask
-
-
-
+// Utility Functions // TODO - switch these for bios_emu
 char get_key_press(){
-        return getch(); // conio.h
+	return getch(); // conio.h
 }
 
 void wait_for_any_key_press(){
-        get_key_press(); // toss out result because we don't care which key
+	get_key_press(); // toss out result because we don't care which key
 }
 
 
-
-void dump_chunk(unsigned int my_segment, unsigned int my_offset, unsigned int my_chunk_size, char* my_file_name){
-    FILE* my_working_file;
-	char far* far_ptr;
-    far_ptr = bios_far_ptr(my_segment,my_offset);
-    my_working_file = fopen(my_file_name,"wb");
-    while(my_chunk_size > 0){
-        fprintf(my_working_file,"%c",(*far_ptr++));
-        --my_chunk_size;
-    }
-    fclose(my_working_file);
-}
-
-unsigned int title(){
-	unsigned int local_mode;
-
-	fprintf(stderr,"main::title()\r\n");
-	fprintf(stdout,"PCjrDUMP\r\n");
-	fprintf(stdout,"Intended to dump the possible cartridge spaces in 32K chunks\r\n");
-	fprintf(stdout,"Note: this does not currently attempt to determine if the cartridge is 32K or\r\n");
-	fprintf(stdout,"64K so you may have to combine two files together to get a full image...\r\n");
-	fprintf(stdout,"Press any key to continue...\r\n");
+// Core Functions
+unsigned char title(){
+	_basic_cls();
+	_basic_locate(1,1);
+	_basic_println("PCjrDUMP - RetroByten");
+	_basic_locate(2,2);
+	_basic_print("Examine/Dump ROM areas");	
+	_basic_locate(4,1);
+	_basic_print("Press enter key to continue...");
 
 	wait_for_any_key_press();
-
-	local_mode = MENU_MODE;
-	return local_mode;
-}
-
-unsigned int menu(){
-        unsigned int local_mode;
-        fprintf(stderr,"main::menu()\r\n");
-
-
-        local_mode = EXIT_MODE;
-        return local_mode;
+	return MENU_MODE;
 }
 
 
 
 
-//int main(int argc, char* argv[]){
-unsigned int program_mode;
-unsigned char previous_video_mode;
-unsigned int segment;
-unsigned int offset;
-unsigned int chunk_size;
-char* working_file_name;
+unsigned char menu(){
+	char far* far_ptr;
+	unsigned int segment;
+	unsigned int offset;
+	unsigned char count;
+
+	unsigned int signature;
+	unsigned char length;
+	unsigned char instruction;
+	
+	// Relies on wrap-around for 0xD000 - 0xF800
+	for ( segment = 0xC000; segment >= 0xC000; segment += 0x800 ){ 
+		offset = 0;
+		
+		_basic_cls();
+		
+		// Print header
+		_basic_locate(1,1);
+		_basic_print("MEMORY - ");
+		_basic_print_hex_16(segment);
+		_basic_print_newline();
+		
+		if (segment >= 0xD000 && segment < 0xF000){ // Check cartridge for header
+			offset = 0x0000;
+			_basic_print("OFFSET - ");
+			_basic_print_hex_16(offset);
+			_basic_print_newline();
+		
+			far_ptr = _x86_far_ptr(segment,offset);
+			// Print Raw header area
+			for (count = 0; count < 16; count++){
+				_basic_print_hex_8(*(far_ptr + (unsigned long)count));
+			}
+			_basic_print_newline();
+		
+			_basic_print("Signature - ");
+			signature = (*(far_ptr + (unsigned long)1)) << 8 |\
+						(*(far_ptr + (unsigned long)0));
+						
+			if(signature == 0xAA55){
+				_basic_println("PRESENT");
+				length = *(far_ptr + 2);
+				instruction = *(far_ptr + (unsigned long)3);
+				
+				_basic_print("Length - ");
+				_basic_print_hex_8(length);
+				_basic_print(" - Entry - ");
+				switch(instruction){
+					case 0xE9:
+						_basic_print("JMP near ");
+						_basic_print_hex_16((*(far_ptr + (unsigned long)5)) << 8 |\
+											(*(far_ptr + (unsigned long)4))
+						);
+						break;
+					case 0xEB:
+						_basic_print("JMP short ");
+						_basic_print_hex_8(*(far_ptr + (unsigned long)4));
+						_basic_print(" , UNK - ");
+						_basic_print_hex_8(*(far_ptr + (unsigned long)5));
+						break;
+					case 0xCB:
+						_basic_print("RETF - ");
+						break;
+					default:
+						_basic_print("Unknown - ");
+						_basic_print_hex_8(instruction);
+						break;
+				}				
+			}
+			else {
+				_basic_println("ABSENT");
+			}
+			
+		}
+		
+		/*
+		// Print first 16 bytes
+		far_ptr = _x86_far_ptr(segment,offset);
+		_basic_print("Raw: ");
+		for ( count = 0; count < 16; count++ ){
+			_basic_print_hex_8(*far_ptr++);
+		}
+		_basic_print_newline();
+		*/
+		
+
+		
+		wait_for_any_key_press();
+	}
+
+
+
+	
+	
+	_basic_print("Press any key to begin exit...");
+	wait_for_any_key_press();
+	return CREDITS_MODE;
+}
+
+unsigned char credits(){
+	_basic_cls();
+	_basic_locate(1,1);
+	_basic_print("CREDITS");
+	_basic_locate(4,1);
+	_basic_print("Programming - Ryan Paterson");
+	_basic_locate(5,1);
+	_basic_print("Press any key to finish exit...");
+	wait_for_any_key_press();
+	return EXIT_MODE;
+}
 
 int main(){
-		previous_video_mode = get_video_mode(); // Save off video mode
-		set_video_mode((unsigned char)video_mode_4025_color); // Set 40x25co
-
-        program_mode = TITLE_MODE; // Set Initial Mode
-        do { // Main Program Loop
-                switch(program_mode){
-                        case TITLE_MODE:
-                                program_mode = title();
-                                break;
-                        case MENU_MODE:
-                                program_mode = menu();
-                                break;
-                        default:
-                                program_mode = EXIT_MODE;
-                                break;
-                }
-        } while (program_mode != EXIT_MODE);
-		
-		set_video_mode(previous_video_mode); // Restore video
-		
-        return 0;
+	
+	// Set stdout to unbuffered
+	setbuf(stdout, NULL);
+	
+	original_video_mode = _bios_get_video_mode(); // Save user's original video mode
+	_bios_set_video_mode(video_mode_4025_color); // Set video mode to lowest common color denominator
+	
+	main_program_mode = TITLE_MODE; // Set initial title mode
+	do { // Main Program Loop
+		switch(main_program_mode){
+			case TITLE_MODE:
+				main_program_mode = title();
+				break;
+			case MENU_MODE:
+				main_program_mode = menu();
+				break;
+			case CREDITS_MODE:
+				main_program_mode = credits();
+				break;
+			default:
+				main_program_mode = EXIT_MODE;
+				break;
+			}
+	} while (main_program_mode != EXIT_MODE);
+	
+	_bios_set_video_mode(original_video_mode); // Restore original video
+	return 0;
 }
-/*
-    fprintf(stdout,"PCjrDUMP\r\n");
-    fprintf(stdout,"Intended to dump the possible cartridge spaces in 32K chunks\r\n");
-    fprintf(stdout,"Note: this does not currently attempt to determine if the cartridge is 32K or\r\n");
-    fprintf(stdout,"64K so you may have to combine two files together to get a full image...\r\n");
-
-    // Set initial segment/offset
-    segment = 0xD000;
-    offset = 0x0000;
-    chunk_size = 0x8000; // 32K
-
-    // Allocate filename space
-    working_file_name = (char*)(malloc((8+1+3+1) * sizeof(char))); // filename.bin\0 = 8 + 1 + 3 + 1
-
-    // Process the segments
-    while (segment >= 0xD000){
-        sprintf(working_file_name,"%04X%04X.bin",segment,offset,chunk_size);
-        fprintf(stdout,"Processing %s\r\n",working_file_name);
-        bios_sum(segment,offset,chunk_size);
-        dump_chunk(segment,offset,chunk_size,working_file_name);
-        segment += 0x800;
-        offset = 0x0000;
-        chunk_size = 0x8000;
-    }
-
-    free(working_file_name);
-*/
-
-/*
-Notes - 40 column
-
----
-- PCjrDUMP\tv0.1\tRetroByten
----
-
-[LEFT]
----
-- D000:0000-7FFF
----
-- xx xx xx xx xx xx xx xx 
-- xx xx xx xx xx xx xx xx
-- xx xx xx xx xx xx xx xx
-- xx xx xx xx xx xx xx xx
----
-
----
 
 
-*/
+

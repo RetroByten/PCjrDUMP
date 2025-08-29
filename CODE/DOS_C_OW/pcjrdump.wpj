@@ -4,9 +4,9 @@ projectIdent
 VpeMain
 1
 WRect
-1544
-2360
-4709
+1288
+2851
+4706
 7872
 2
 MProject
@@ -30,7 +30,7 @@ VComponent
 WRect
 0
 0
-5718
+5715
 4352
 0
 0
@@ -39,5 +39,5 @@ WFileName
 12
 pcjrdump.tgt
 0
-3
+8
 7
