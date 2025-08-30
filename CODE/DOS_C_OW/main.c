@@ -48,10 +48,157 @@ unsigned char title(){
 	return MENU_MODE;
 }
 
+void print_memory_block(unsigned int segment, unsigned int offset, unsigned int count){
+	char far* far_ptr;
+	
+	far_ptr = _x86_far_ptr(segment,offset);
+	while( count > 0 ){
+		_basic_print_hex_8(*far_ptr++);
+		count--;
+	}
+}
 
+void print_header(unsigned int segment, unsigned int offset, unsigned int count){
+	_basic_locate(1,1);
+	_basic_print("MEMORY - ");
+	_basic_print_hex_16(segment);
+	_basic_print_char(':');
+	_basic_print_hex_16(offset);
+	_basic_print_char(',');
+	_basic_print_hex_16(count);
+}
+
+void dump_memory(unsigned int segment, unsigned int offset, unsigned int count){
+	char far* far_ptr;
+	char* file_name;
+	FILE* working_file;
+	
+	file_name = "00000000.xxx";
+	sprintf(file_name,"%04X",segment);
+	sprintf(file_name+4,"%04X",offset);
+	sprintf(file_name+8,".bin");
+	
+	far_ptr = _x86_far_ptr(segment,offset);
+	working_file = fopen(file_name,"wb");
+	while (count > 0){
+		fprintf(working_file,"%c",*far_ptr++);
+	}
+	
+	fclose(working_file);
+}
+
+void memory_keypress(unsigned int segment, unsigned int offset, unsigned int count){
+	char input;
+
+	_basic_locate(10,1);
+	_basic_print("Press 'D' to dump to ");
+	_basic_print_hex_16(segment);
+	_basic_print_hex_16(offset);
+	_basic_println(".bin");
+	_basic_println("Press 'N' to move to next block...");
+	
+	input = 'a';
+	do {
+		input = get_key_press();
+		if ( input == 'd' ){
+			_basic_print("Dumping...");
+			dump_memory(segment,offset,count);
+			_basic_print("Done! Moving on...");
+			input = 'n';
+		}
+	} while(input != 'n' && input != 'N');
+}
+
+void test_4_planar_board_ros_cksum(){ // PCjr Technical Reference (A-9)
+	unsigned int segment; // DS
+	unsigned int offset; // SI
+	unsigned int count; // CX
+	
+	unsigned int working_segment;
+	unsigned int working_offset;
+	unsigned int working_count;
+	
+	unsigned char result;
+	
+	// LOW
+	segment = 0xF000;
+	working_segment = segment;
+	offset = 0x0000;
+	working_offset = offset;
+	count = 0x8000;
+	working_count = count;
+
+	// Reset screen
+	_basic_cls();
+	
+	// Print header
+	print_header(segment,offset,count);
+	_basic_print_newline();
+	
+	// Print 16 bytes
+	print_memory_block(segment,offset,16);
+	_basic_print_newline();
+	
+	// Check Low, then High
+	result = _bios_ros_cksum(&working_segment,&working_offset,&working_count);
+	_basic_print("Checksum - ");
+	if(result == 0){
+		_basic_print("Pass");
+	}
+	else {
+		_basic_print("Fail");
+	}
+	_basic_print_newline();
+	
+	// TODO - Add CRC
+	_basic_print("CRC - ");
+	_basic_print_newline();
+	
+	// Menu options
+	memory_keypress(segment,offset,count);
+	
+	
+	// HIGH
+	// segment/working_segment hasn't changed
+	offset = working_offset;
+	count = 0x8000;
+	working_count = count;
+	
+	// Reset screen
+	_basic_cls();
+	
+	// Print header
+	print_header(segment,offset,count);
+	_basic_print_newline();
+	
+	// Print 16 bytes
+	print_memory_block(segment,offset,16);
+	_basic_print_newline();
+	
+	// Check Low, then High
+	result = _bios_ros_cksum(&working_segment,&working_offset,&working_count);
+	_basic_print("Checksum - ");
+	if(result == 0){
+		_basic_print("Pass");
+	}
+	else {
+		_basic_print("Fail");
+	}
+	memory_keypress(segment,offset,count);
+}
 
 
 unsigned char menu(){
+	test_4_planar_board_ros_cksum(); // PCjr Technical Reference (A-9)
+		
+	// C000
+	
+	// D000-E800
+
+
+	
+	return CREDITS_MODE;
+	/*
 	char far* far_ptr;
 	unsigned int segment;
 	unsigned int offset;
@@ -125,7 +272,7 @@ unsigned char menu(){
 			}
 			
 		}
-		
+		*/
 		/*
 		// Print first 16 bytes
 		far_ptr = _x86_far_ptr(segment,offset);
@@ -134,11 +281,11 @@ unsigned char menu(){
 			_basic_print_hex_8(*far_ptr++);
 		}
 		_basic_print_newline();
-		*/
+		
 		
 
 		
-		wait_for_any_key_press();
+		//wait_for_any_key_press();
 	}
 
 
@@ -148,6 +295,7 @@ unsigned char menu(){
 	_basic_print("Press any key to begin exit...");
 	wait_for_any_key_press();
 	return CREDITS_MODE;
+	*/
 }
 
 unsigned char credits(){

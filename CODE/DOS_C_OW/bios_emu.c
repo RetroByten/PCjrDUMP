@@ -39,29 +39,17 @@ void _bios_set_video_mode(unsigned char mode){
 }
 
 // PCjr Technical Reference - Test 4 - F000:0134 (A-9) and F000:FEEB (A-107)
-unsigned int _bios_ros_cksum(unsigned int segment, unsigned int offset, unsigned int chunk_size){
-    unsigned int result;
-    char sum;
-    char far* far_ptr;
-
-    far_ptr = _x86_far_ptr(segment,offset);
-    sum = 0;
-    while(chunk_size > 0){
-        sum+=(*far_ptr++);
-        --chunk_size;
-    }
-    result = (unsigned int)sum;
-	/*
-    if(sum == 0){
-        fprintf(stdout,"Checksum: PASS\r\n");
-    }
-    else {
-        fprintf(stdout,"Checksum: FAIL\r\n");
-    }
-	*/
-    return result;
+unsigned char _bios_ros_cksum(unsigned int* segment, unsigned int* offset, unsigned int* chunk_size){
+	unsigned char sum;
+	
+	sum = 0;
+	while ((*chunk_size) > 0){
+		sum+=*(_x86_far_ptr(*segment,*offset));
+		(*offset)++; // increment the offset
+		(*chunk_size)--; // decrement chunk_size;
+	} 
+	return sum;
 }
-
 
 // X^16 + X^12 + X^5 + 1
 // DS = data segment of ROM space to be checked
@@ -81,6 +69,9 @@ unsigned int _bios_crc_check(unsigned int segment, unsigned int offset, unsigned
     unsigned int result;
     char far* far_ptr;
     union REGPACK* reg_pack;
+
+	// TODO - convert to pointers, figure out what the end result of offset and chunk_size should be
+
 
     // Allocate the reg_pack memory
     reg_pack = (union REGPACK*)malloc(sizeof(union REGPACK));
@@ -128,16 +119,4 @@ unsigned int _bios_crc_check(unsigned int segment, unsigned int offset, unsigned
 
     free(reg_pack); // Free the regpack memory
     return result;
-}
-
-unsigned int _bios_sum(unsigned int segment, unsigned int offset, unsigned int chunk_size){
-    if(segment >= 0xD000 && segment < 0xF000){
-        // TODO - use ROM checksum
-        // A-21 + A-73
-        return _bios_crc_check(segment, offset, chunk_size);
-    }
-    else {
-        // Uses ROS Checksum ( C000 < D000, > F000
-        return _bios_ros_cksum(segment, offset, chunk_size);
-    }
 }
